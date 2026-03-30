@@ -30,7 +30,8 @@
 
 /* USER CODE BEGIN PV */
 /* Private variables ---------------------------------------------------------*/
-
+extern uint8_t wasm_ready;
+extern uint8_t wasm_buffer[16 * 1024];
 /* USER CODE END PV */
 
 /** @addtogroup STM32_USB_OTG_DEVICE_LIBRARY
@@ -61,7 +62,7 @@
   * @{
   */
 
-#define FLASH_DESC_STR      "@Internal Flash   /0x08000000/03*016Ka,01*016Kg,01*064Kg,07*128Kg,04*016Kg,01*064Kg,07*128Kg"
+#define FLASH_DESC_STR      "@Buffer   /0x00000000/32*01Ka"
 
 /* USER CODE BEGIN PRIVATE_DEFINES */
 
@@ -177,7 +178,7 @@ uint16_t MEM_If_DeInit_FS(void)
 uint16_t MEM_If_Erase_FS(uint32_t Add)
 {
   /* USER CODE BEGIN 2 */
-  UNUSED(Add);
+  wasm_ready = 0;
 
   return (USBD_OK);
   /* USER CODE END 2 */
@@ -196,6 +197,8 @@ uint16_t MEM_If_Write_FS(uint8_t *src, uint8_t *dest, uint32_t Len)
   UNUSED(src);
   UNUSED(dest);
   UNUSED(Len);
+
+  wasm_ready = 0;
 
   return (USBD_OK);
   /* USER CODE END 3 */

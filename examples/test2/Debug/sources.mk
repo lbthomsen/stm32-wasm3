@@ -35,5 +35,4 @@ USB_DEVICE/App \
 USB_DEVICE/Target \
 wasm3/extensions \
 wasm3 \
-Drivers/CMSIS/Device/ST/STM32F4xx/Source/Templates \
 

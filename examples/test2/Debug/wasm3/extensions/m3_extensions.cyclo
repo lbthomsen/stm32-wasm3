@@ -1,3 +1,0 @@
-../wasm3/extensions/m3_extensions.c:15:12:m3_NewModule	2
-../wasm3/extensions/m3_extensions.c:34:11:m3_InjectFunction	12
-../wasm3/extensions/m3_extensions.c:109:14:m3_GetFunctionByIndex	1

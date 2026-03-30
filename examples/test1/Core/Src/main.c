@@ -49,12 +49,19 @@ UART_HandleTypeDef huart1;
 
 /* USER CODE BEGIN PV */
 
-__attribute__((section(".ccmram")))  uint8_t wasm_stack[64 * 1024]; // 16KB for the Wasm stack/internal use
+//uint8_t wasm_ready;             // Flag to indicate if wasm is ready
+//uint8_t wasm_buffer[16 * 1024]; // Wasm binary goes here
+//uint8_t wasm_stack[64 * 1024]; // 16KB for the Wasm stack/internal use
 
-unsigned char test_wasm[] = { 0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00,
-		0x01, 0x07, 0x01, 0x60, 0x02, 0x7f, 0x7f, 0x01, 0x7f, 0x03, 0x02, 0x01,
-		0x00, 0x07, 0x07, 0x01, 0x03, 0x61, 0x64, 0x64, 0x00, 0x00, 0x0a, 0x09,
-		0x01, 0x07, 0x00, 0x20, 0x00, 0x20, 0x01, 0x6a, 0x0b };
+unsigned char toggle_tiny_wasm[] = {
+  0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00, 0x01, 0x04, 0x01, 0x60,
+  0x00, 0x00, 0x02, 0x12, 0x01, 0x03, 0x65, 0x6e, 0x76, 0x0a, 0x74, 0x6f,
+  0x67, 0x67, 0x6c, 0x65, 0x5f, 0x6c, 0x65, 0x64, 0x00, 0x00, 0x03, 0x02,
+  0x01, 0x00, 0x07, 0x0a, 0x01, 0x06, 0x74, 0x6f, 0x67, 0x67, 0x6c, 0x65,
+  0x00, 0x01, 0x0a, 0x06, 0x01, 0x04, 0x00, 0x10, 0x00, 0x0b
+};
+
+unsigned int toggle_tiny_wasm_len = 58;
 
 /* USER CODE END PV */
 
@@ -81,33 +88,15 @@ int __io_putchar(int ch) {
 	return ch;
 }
 
-void run_wasm(void) {
-	IM3Environment env = m3_NewEnvironment();
-	/* We create a runtime using our CCM RAM stack */
-	IM3Runtime runtime = m3_NewRuntime(env, sizeof(wasm_stack), NULL);
+// This is the "Bridge" function on your STM32
+m3ApiRawFunction(host_toggle_led) {
 
-	// In Wasm3, you can manually point the runtime to use your specific buffer
-	// For simplicity, m3_NewRuntime allocates from the system heap unless
-	// you override the allocator, but defining the stack in CCM is a great start.
+	// Toggle the LED port
+    HAL_GPIO_TogglePin(LED_GPIO_Port, LED_Pin);
 
-	IM3Module module;
-	m3_ParseModule(env, &module, test_wasm, sizeof(test_wasm));
-	m3_LoadModule(runtime, module);
+    // Return success (void functions in Wasm still return m3Err_none)
+    m3ApiSuccess();
 
-	IM3Function f;
-	m3_FindFunction(&f, runtime, "add");
-
-	// Call the function: add(10, 20)
-	const char *i_argv[] = { "10", "20" };
-	m3_CallArgv(f, 2, i_argv);
-
-	// Get the result
-	int32_t result = 0;
-	m3_GetResultsV(f, &result);
-
-	printf("10 + 20 = %d\n", result);
-
-	// result is now 30!
 }
 
 /* USER CODE END 0 */
@@ -146,7 +135,28 @@ int main(void) {
 
 	printf("\n\n\n\nStarting WASM demo\n");
 
-	run_wasm();
+	printf("Creating M3 environment\n");
+	IM3Environment env = m3_NewEnvironment();
+
+	printf("Creating M3 runtime\n");
+	IM3Runtime runtime = m3_NewRuntime(env, 512, NULL); // 512 byte stack is enough
+
+	printf("Parse M3 module\n");
+	IM3Module module;
+	M3Result result = m3_ParseModule(env, &module, toggle_tiny_wasm, sizeof(toggle_tiny_wasm));
+
+	printf("Load M3 module\n");
+	result = m3_LoadModule(runtime, module);
+	if (result) { printf("Load error: %s\n", result); }
+
+	// Link your host function
+	printf("Link function\n");
+	m3_LinkRawFunction(module, "env", "toggle_led", "v()", host_toggle_led);
+
+	// Create function
+	printf("Create function\n");
+	IM3Function f;
+	m3_FindFunction(&f, runtime, "toggle");
 
 	/* USER CODE END 2 */
 
@@ -160,7 +170,7 @@ int main(void) {
 		now = uwTick;
 
 		if (now >= next_blink) {
-			HAL_GPIO_TogglePin(LED_GPIO_Port, LED_Pin);
+			m3_CallV(f);
 			next_blink = now + 500;
 		}
 
