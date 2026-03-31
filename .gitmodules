@@ -1,3 +1,6 @@
 [submodule "wasm3"]
 	path = wasm3
 	url = git@github.com:wasm3/wasm3.git
+[submodule "stm32-ws2812"]
+	path = stm32-ws2812
+	url = git@github.com:lbthomsen/stm32-ws2812.git

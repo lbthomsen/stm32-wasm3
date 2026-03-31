@@ -1,0 +1,12 @@
+../wasm3/m3_api_libc.c:22:1:m3_libc_abort	1
+../wasm3/m3_api_libc.c:27:1:m3_libc_exit	1
+../wasm3/m3_api_libc.c:195:11:SuppressLookupFailure	2
+../wasm3/m3_api_libc.c:203:1:m3_spectest_dummy	1
+../wasm3/m3_api_libc.c:35:1:m3_libc_memset	3
+../wasm3/m3_api_libc.c:49:1:m3_libc_memmove	5
+../wasm3/m3_api_libc.c:64:1:m3_libc_print	3
+../wasm3/m3_api_libc.c:80:6:internal_itoa	5
+../wasm3/m3_api_libc.c:107:1:m3_libc_printf	20
+../wasm3/m3_api_libc.c:179:1:m3_libc_clock_ms	1
+../wasm3/m3_api_libc.c:208:11:m3_LinkSpecTest	7
+../wasm3/m3_api_libc.c:227:11:m3_LinkLibC	8
