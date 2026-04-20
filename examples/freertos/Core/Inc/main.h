@@ -60,6 +60,7 @@ void Error_Handler(void);
 
 /* Private defines -----------------------------------------------------------*/
 #define LED_CNT 104
+#define WASM_SIZE 32
 #define LED_Pin GPIO_PIN_13
 #define LED_GPIO_Port GPIOC
 

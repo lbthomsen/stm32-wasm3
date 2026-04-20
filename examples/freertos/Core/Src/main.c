@@ -19,7 +19,6 @@
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
 #include "cmsis_os.h"
-#include "usb_device.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
@@ -54,6 +53,8 @@ DMA_HandleTypeDef hdma_tim3_ch3;
 
 UART_HandleTypeDef huart1;
 
+PCD_HandleTypeDef hpcd_USB_OTG_FS;
+
 /* Definitions for defaultTask */
 osThreadId_t defaultTaskHandle;
 const osThreadAttr_t defaultTask_attributes = {
@@ -82,22 +83,10 @@ const osThreadAttr_t statusTask_attributes = {
   .stack_size = 512 * 4,
   .priority = (osPriority_t) osPriorityLow,
 };
-/* Definitions for ws2812Task */
-osThreadId_t ws2812TaskHandle;
-const osThreadAttr_t ws2812Task_attributes = {
-  .name = "ws2812Task",
-  .stack_size = 512 * 4,
-  .priority = (osPriority_t) osPriorityLow,
-};
 /* Definitions for tickQueue */
 osMessageQueueId_t tickQueueHandle;
 const osMessageQueueAttr_t tickQueue_attributes = {
   .name = "tickQueue"
-};
-/* Definitions for ws2812Queue */
-osMessageQueueId_t ws2812QueueHandle;
-const osMessageQueueAttr_t ws2812Queue_attributes = {
-  .name = "ws2812Queue"
 };
 /* Definitions for printMutex */
 osMutexId_t printMutexHandle;
@@ -108,6 +97,11 @@ const osMutexAttr_t printMutex_attributes = {
 osMutexId_t ledMutexHandle;
 const osMutexAttr_t ledMutex_attributes = {
   .name = "ledMutex"
+};
+/* Definitions for ws2812Mutex */
+osMutexId_t ws2812MutexHandle;
+const osMutexAttr_t ws2812Mutex_attributes = {
+  .name = "ws2812Mutex"
 };
 /* Definitions for ledSemaphore */
 osSemaphoreId_t ledSemaphoreHandle;
@@ -129,10 +123,12 @@ uint8_t ucHeap[configTOTAL_HEAP_SIZE] __attribute__((section(".ccmram"))); // Pu
 
 uint8_t wasm_stack[16 * 1024]; // 16KB for the Wasm stack/internal use
 
+unsigned char wasm_code[WASM_SIZE * 1024] = {0};
+
 unsigned char test_wasm[] = { 0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00,
-		0x01, 0x07, 0x01, 0x60, 0x02, 0x7f, 0x7f, 0x01, 0x7f, 0x03, 0x02, 0x01,
-		0x00, 0x07, 0x07, 0x01, 0x03, 0x61, 0x64, 0x64, 0x00, 0x00, 0x0a, 0x09,
-		0x01, 0x07, 0x00, 0x20, 0x00, 0x20, 0x01, 0x6a, 0x0b };
+        0x01, 0x07, 0x01, 0x60, 0x02, 0x7f, 0x7f, 0x01, 0x7f, 0x03, 0x02, 0x01,
+        0x00, 0x07, 0x07, 0x01, 0x03, 0x61, 0x64, 0x64, 0x00, 0x00, 0x0a, 0x09,
+        0x01, 0x07, 0x00, 0x20, 0x00, 0x20, 0x01, 0x6a, 0x0b };
 
 /* USER CODE END PV */
 
@@ -143,11 +139,11 @@ static void MX_DMA_Init(void);
 static void MX_USART1_UART_Init(void);
 static void MX_TIM13_Init(void);
 static void MX_TIM3_Init(void);
+static void MX_USB_OTG_FS_PCD_Init(void);
 void StartDefaultTask(void *argument);
 void startLedTask(void *argument);
 void startTickTask(void *argument);
 void startStatusTask(void *argument);
-void startWs2812Task(void *argument);
 
 /* USER CODE BEGIN PFP */
 
@@ -158,23 +154,23 @@ void startWs2812Task(void *argument);
 
 // Send printf to uart1
 int __io_putchar(int ch) {
-	if (ch == '\n') {
-		HAL_UART_Transmit(&huart1, (uint8_t*) "\r", 1, HAL_MAX_DELAY);
-	}
-	if (HAL_UART_Transmit(&huart1, (uint8_t*) &ch, 1, HAL_MAX_DELAY)
-			!= HAL_OK) {
-		return -1;
-	}
-	return ch;
+    if (ch == '\n') {
+        HAL_UART_Transmit(&huart1, (uint8_t*) "\r", 1, HAL_MAX_DELAY);
+    }
+    if (HAL_UART_Transmit(&huart1, (uint8_t*) &ch, 1, HAL_MAX_DELAY)
+            != HAL_OK) {
+        return -1;
+    }
+    return ch;
 }
 
 void configureTimerForRunTimeStats(void) {
-	ulHighFrequencyTimerTicks = 0;
-	HAL_TIM_Base_Start_IT(&htim13);
+    ulHighFrequencyTimerTicks = 0;
+    HAL_TIM_Base_Start_IT(&htim13);
 }
 
 unsigned long getRunTimeCounterValue(void) {
-	return ulHighFrequencyTimerTicks;
+    return ulHighFrequencyTimerTicks;
 }
 
 // Done sending first half of the DMA buffer - this can now safely be updated
@@ -196,30 +192,30 @@ void HAL_TIM_PWM_PulseFinishedCallback(TIM_HandleTypeDef *htim) {
 }
 
 void run_wasm(void) {
-	IM3Environment env = m3_NewEnvironment();
-	/* We create a runtime using our CCM RAM stack */
-	IM3Runtime runtime = m3_NewRuntime(env, sizeof(wasm_stack), NULL);
+    IM3Environment env = m3_NewEnvironment();
+    /* We create a runtime using our CCM RAM stack */
+    IM3Runtime runtime = m3_NewRuntime(env, sizeof(wasm_stack), NULL);
 
-	// In Wasm3, you can manually point the runtime to use your specific buffer
-	// For simplicity, m3_NewRuntime allocates from the system heap unless
-	// you override the allocator, but defining the stack in CCM is a great start.
+    // In Wasm3, you can manually point the runtime to use your specific buffer
+    // For simplicity, m3_NewRuntime allocates from the system heap unless
+    // you override the allocator, but defining the stack in CCM is a great start.
 
-	IM3Module module;
-	m3_ParseModule(env, &module, test_wasm, sizeof(test_wasm));
-	m3_LoadModule(runtime, module);
+    IM3Module module;
+    m3_ParseModule(env, &module, test_wasm, sizeof(test_wasm));
+    m3_LoadModule(runtime, module);
 
-	IM3Function f;
-	m3_FindFunction(&f, runtime, "add");
+    IM3Function f;
+    m3_FindFunction(&f, runtime, "add");
 
-	// Call the function: add(10, 20)
-	const char *i_argv[] = { "10", "20" };
-	m3_CallArgv(f, 2, i_argv);
+    // Call the function: add(10, 20)
+    const char *i_argv[] = { "10", "20" };
+    m3_CallArgv(f, 2, i_argv);
 
-	// Get the result
-	int32_t result = 0;
-	m3_GetResultsV(f, &result);
+    // Get the result
+    int32_t result = 0;
+    m3_GetResultsV(f, &result);
 
-	// result is now 30!
+    // result is now 30!
 }
 
 /* USER CODE END 0 */
@@ -257,17 +253,18 @@ int main(void)
   MX_USART1_UART_Init();
   MX_TIM13_Init();
   MX_TIM3_Init();
+  MX_USB_OTG_FS_PCD_Init();
   /* USER CODE BEGIN 2 */
 
-	printf("\n\n\n\nStarting WASM demo\n");
+    printf("\n\n\n\nStarting WASM demo\n");
 
     printf("Firing up ws2812\n");
     ws2812_init(&ws2812, &htim3, TIM_CHANNEL_3, 512);
     zeroLedValues(&ws2812);
 
-    setLedValues(&ws2812, 0, 10, 0, 10);
+    //setLedValues(&ws2812, 0, 10, 0, 10);
 
-	//run_wasm();
+    //run_wasm();
 
   /* USER CODE END 2 */
 
@@ -280,8 +277,11 @@ int main(void)
   /* creation of ledMutex */
   ledMutexHandle = osMutexNew(&ledMutex_attributes);
 
+  /* creation of ws2812Mutex */
+  ws2812MutexHandle = osMutexNew(&ws2812Mutex_attributes);
+
   /* USER CODE BEGIN RTOS_MUTEX */
-	/* add mutexes, ... */
+    /* add mutexes, ... */
   /* USER CODE END RTOS_MUTEX */
 
   /* Create the semaphores(s) */
@@ -289,22 +289,19 @@ int main(void)
   ledSemaphoreHandle = osSemaphoreNew(1, 1, &ledSemaphore_attributes);
 
   /* USER CODE BEGIN RTOS_SEMAPHORES */
-	/* add semaphores, ... */
+    /* add semaphores, ... */
   /* USER CODE END RTOS_SEMAPHORES */
 
   /* USER CODE BEGIN RTOS_TIMERS */
-	/* start timers, add new ones, ... */
+    /* start timers, add new ones, ... */
   /* USER CODE END RTOS_TIMERS */
 
   /* Create the queue(s) */
   /* creation of tickQueue */
   tickQueueHandle = osMessageQueueNew (3, sizeof(uint32_t), &tickQueue_attributes);
 
-  /* creation of ws2812Queue */
-  ws2812QueueHandle = osMessageQueueNew (2, sizeof(uint16_t), &ws2812Queue_attributes);
-
   /* USER CODE BEGIN RTOS_QUEUES */
-	/* add queues, ... */
+    /* add queues, ... */
   /* USER CODE END RTOS_QUEUES */
 
   /* Create the thread(s) */
@@ -320,15 +317,12 @@ int main(void)
   /* creation of statusTask */
   statusTaskHandle = osThreadNew(startStatusTask, NULL, &statusTask_attributes);
 
-  /* creation of ws2812Task */
-  ws2812TaskHandle = osThreadNew(startWs2812Task, NULL, &ws2812Task_attributes);
-
   /* USER CODE BEGIN RTOS_THREADS */
-	/* add threads, ... */
+    /* add threads, ... */
   /* USER CODE END RTOS_THREADS */
 
   /* USER CODE BEGIN RTOS_EVENTS */
-	/* add events, ... */
+    /* add events, ... */
   /* USER CODE END RTOS_EVENTS */
 
   /* Start scheduler */
@@ -338,27 +332,12 @@ int main(void)
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
-
-	uint32_t now = 0, next_blink = 500, next_tick = 1000;
-
-	while (1) {
-
-		now = uwTick;
-
-		if (now >= next_blink) {
-			HAL_GPIO_TogglePin(LED_GPIO_Port, LED_Pin);
-			next_blink = now + 500;
-		}
-
-		if (now >= next_tick) {
-			printf("Tick %lu\n", now / 1000);
-			next_tick = now + 1000;
-		}
+    while (1) {
 
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-	}
+    }
   /* USER CODE END 3 */
 }
 
@@ -531,6 +510,41 @@ static void MX_USART1_UART_Init(void)
 }
 
 /**
+  * @brief USB_OTG_FS Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_USB_OTG_FS_PCD_Init(void)
+{
+
+  /* USER CODE BEGIN USB_OTG_FS_Init 0 */
+
+  /* USER CODE END USB_OTG_FS_Init 0 */
+
+  /* USER CODE BEGIN USB_OTG_FS_Init 1 */
+
+  /* USER CODE END USB_OTG_FS_Init 1 */
+  hpcd_USB_OTG_FS.Instance = USB_OTG_FS;
+  hpcd_USB_OTG_FS.Init.dev_endpoints = 4;
+  hpcd_USB_OTG_FS.Init.speed = PCD_SPEED_FULL;
+  hpcd_USB_OTG_FS.Init.dma_enable = DISABLE;
+  hpcd_USB_OTG_FS.Init.phy_itface = PCD_PHY_EMBEDDED;
+  hpcd_USB_OTG_FS.Init.Sof_enable = DISABLE;
+  hpcd_USB_OTG_FS.Init.low_power_enable = DISABLE;
+  hpcd_USB_OTG_FS.Init.lpm_enable = DISABLE;
+  hpcd_USB_OTG_FS.Init.vbus_sensing_enable = DISABLE;
+  hpcd_USB_OTG_FS.Init.use_dedicated_ep1 = DISABLE;
+  if (HAL_PCD_Init(&hpcd_USB_OTG_FS) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN USB_OTG_FS_Init 2 */
+
+  /* USER CODE END USB_OTG_FS_Init 2 */
+
+}
+
+/**
   * Enable DMA controller clock
   */
 static void MX_DMA_Init(void)
@@ -592,32 +606,40 @@ static void MX_GPIO_Init(void)
 /* USER CODE END Header_StartDefaultTask */
 void StartDefaultTask(void *argument)
 {
-  /* init code for USB_DEVICE */
-  MX_USB_DEVICE_Init();
   /* USER CODE BEGIN 5 */
 
-	uint32_t loop_cnt = 0;
+    uint32_t loop_cnt = 0;
 
-	/* Infinite loop */
-	for (;;) {
-		osDelay(100);
+    uint8_t led = 0;
 
-		if (loop_cnt % 10 == 0) {
+    /* Infinite loop */
+    for (;;) {
+        osDelay(100);
 
-			uint32_t tick = osKernelGetTickCount();
+        if (loop_cnt % 10 == 0) {
 
-			osMessageQueuePut(tickQueueHandle, &tick, 0, osWaitForever);
+            uint32_t tick = osKernelGetTickCount();
 
-		}
+            osMessageQueuePut(tickQueueHandle, &tick, 0, osWaitForever);
 
-		if (loop_cnt % 5 == 0) {
+        }
 
-			osSemaphoreRelease(ledSemaphoreHandle);
+        if (loop_cnt % 5 == 0) {
 
-		}
+            osSemaphoreRelease(ledSemaphoreHandle);
 
-		++loop_cnt;
-	}
+        }
+
+        zeroLedValues(&ws2812);
+
+        setLedValues(&ws2812, led, 10, 0, 10);
+
+        ++led;
+        if (led >= 64)
+            led = 0;
+
+        ++loop_cnt;
+    }
   /* USER CODE END 5 */
 }
 
@@ -632,24 +654,24 @@ void startLedTask(void *argument)
 {
   /* USER CODE BEGIN startLedTask */
 
-	osStatus_t ret;
+    osStatus_t ret;
 
-	/* Infinite loop */
-	for (;;) {
+    /* Infinite loop */
+    for (;;) {
 
-		ret = osSemaphoreAcquire(ledSemaphoreHandle, osWaitForever);
+        ret = osSemaphoreAcquire(ledSemaphoreHandle, osWaitForever);
 
-		if (!ret) {
+        if (!ret) {
 
-			osMutexWait(ledMutexHandle, osWaitForever);
+            osMutexWait(ledMutexHandle, osWaitForever);
 
-			HAL_GPIO_TogglePin(LED_GPIO_Port, LED_Pin);
+            HAL_GPIO_TogglePin(LED_GPIO_Port, LED_Pin);
 
-			osMutexRelease(ledMutexHandle);
+            osMutexRelease(ledMutexHandle);
 
-		}
+        }
 
-	}
+    }
   /* USER CODE END startLedTask */
 }
 
@@ -663,26 +685,26 @@ void startLedTask(void *argument)
 void startTickTask(void *argument)
 {
   /* USER CODE BEGIN startTickTask */
-	osStatus_t ret;
+    osStatus_t ret;
 
-	/* Infinite loop */
-	for (;;) {
+    /* Infinite loop */
+    for (;;) {
 
-		uint32_t tick;
+        uint32_t tick;
 
-		ret = osMessageQueueGet(tickQueueHandle, &tick, NULL, osWaitForever);
+        ret = osMessageQueueGet(tickQueueHandle, &tick, NULL, osWaitForever);
 
-		if (ret == osOK) {
+        if (ret == osOK) {
 
-			osMutexWait(printMutexHandle, osWaitForever);
+            osMutexWait(printMutexHandle, osWaitForever);
 
-			printf("Tick %lu \n", tick / 1000);
+            printf("Tick %lu \n", tick / 1000);
 
-			osMutexRelease(printMutexHandle);
+            osMutexRelease(printMutexHandle);
 
-		}
+        }
 
-	}
+    }
   /* USER CODE END startTickTask */
 }
 
@@ -696,71 +718,54 @@ void startTickTask(void *argument)
 void startStatusTask(void *argument)
 {
   /* USER CODE BEGIN startStatusTask */
-	TaskStatus_t *pxTaskStatusArray;
-	volatile UBaseType_t uxArraySize, x;
-	unsigned long ulTotalRunTime;
-	float runtime_percentage;
+    TaskStatus_t *pxTaskStatusArray;
+    volatile UBaseType_t uxArraySize, x;
+    unsigned long ulTotalRunTime;
+    float runtime_percentage;
 
-	/* Infinite loop */
-	for (;;) {
+    /* Infinite loop */
+    for (;;) {
 
-		osDelay(10000);
+        osDelay(10000);
 
-		uxArraySize = uxTaskGetNumberOfTasks();
-		pxTaskStatusArray = pvPortMalloc(uxArraySize * sizeof(TaskStatus_t)); // a little bit scary!
+        uxArraySize = uxTaskGetNumberOfTasks();
+        pxTaskStatusArray = pvPortMalloc(uxArraySize * sizeof(TaskStatus_t)); // a little bit scary!
 
-		osMutexWait(printMutexHandle, osWaitForever);
+        osMutexWait(printMutexHandle, osWaitForever);
 
-		if (pxTaskStatusArray != NULL) {
+        if (pxTaskStatusArray != NULL) {
 
-			uxArraySize = uxTaskGetSystemState(pxTaskStatusArray, uxArraySize,
-					&ulTotalRunTime);
+            uxArraySize = uxTaskGetSystemState(pxTaskStatusArray, uxArraySize,
+                    &ulTotalRunTime);
 
-			printf("Task count = %lu\n", uxArraySize);
-			printf("No       Name          P  S   Usage       Count      HW\n");
+            printf("Task count = %lu\n", uxArraySize);
+            printf("No       Name          P  S   Usage       Count      HW\n");
 
-			for (x = 0; x < uxArraySize; x++) {
+            for (x = 0; x < uxArraySize; x++) {
 
-				runtime_percentage = (float) (100
-						* (float) pxTaskStatusArray[x].ulRunTimeCounter
-						/ (float) ulTotalRunTime);
+                runtime_percentage = (float) (100
+                        * (float) pxTaskStatusArray[x].ulRunTimeCounter
+                        / (float) ulTotalRunTime);
 
-				printf("Task %2lu: %-12s %2lu %2d %8.4f (%12lu) %5i\n", x,
-						pxTaskStatusArray[x].pcTaskName,
-						pxTaskStatusArray[x].uxCurrentPriority,
-						pxTaskStatusArray[x].eCurrentState, runtime_percentage,
-						pxTaskStatusArray[x].ulRunTimeCounter,
-						pxTaskStatusArray[x].usStackHighWaterMark);
+                printf("Task %2lu: %-12s %2lu %2d %8.4f (%12lu) %5i\n", x,
+                        pxTaskStatusArray[x].pcTaskName,
+                        pxTaskStatusArray[x].uxCurrentPriority,
+                        pxTaskStatusArray[x].eCurrentState, runtime_percentage,
+                        pxTaskStatusArray[x].ulRunTimeCounter,
+                        pxTaskStatusArray[x].usStackHighWaterMark);
 
-			}
+            }
 
-			vPortFree(pxTaskStatusArray);
+            vPortFree(pxTaskStatusArray);
 
-		} else {
-			printf("Unable to allocate stack space\n");
-		}
+        } else {
+            printf("Unable to allocate stack space\n");
+        }
 
-		osMutexRelease(printMutexHandle);
+        osMutexRelease(printMutexHandle);
 
-	}
+    }
   /* USER CODE END startStatusTask */
-}
-
-/* USER CODE BEGIN Header_startWs2812Task */
-/**
-* @brief Function implementing the ws2812Task thread.
-* @param argument: Not used
-* @retval None
-*/
-/* USER CODE END Header_startWs2812Task */
-void startWs2812Task(void *argument)
-{
-  /* USER CODE BEGIN startWs2812Task */
-  /* Infinite loop */
-  for(;;) {
-    osDelay(1);
-  }
-  /* USER CODE END startWs2812Task */
 }
 
 /**
@@ -792,10 +797,10 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 void Error_Handler(void)
 {
   /* USER CODE BEGIN Error_Handler_Debug */
-	/* User can add his own implementation to report the HAL error return state */
-	__disable_irq();
-	while (1) {
-	}
+    /* User can add his own implementation to report the HAL error return state */
+    __disable_irq();
+    while (1) {
+    }
   /* USER CODE END Error_Handler_Debug */
 }
 #ifdef USE_FULL_ASSERT
