@@ -70,7 +70,7 @@ static char const* string_desc_arr[] = {
      * Example for 64KB RAM starting at 0x20000000:
      * a = Read/Write, e = Readable, g = Readable/Writable/Erasable
      */
-    "@Internal WASM /0x00000000/32*001Kg"
+    "@Internal WASM /0x00000000/32*001Ka"
 };
 
 static uint16_t _desc_str[64 + 1]; // Increased size for the long DFU string
