@@ -1,6 +1,5 @@
 ../tinyusb/device/usbd.c:82:19:tud_vendor_control_xfer_cb	1
 ../tinyusb/device/usbd.c:622:13:configuration_reset	6
-../tinyusb/device/usbd.c:1300:6:usbd_int_set	2
 ../tinyusb/device/usbd.c:634:13:usbd_reset	1
 ../tinyusb/device/usbd.c:799:13:invoke_class_control	1
 ../tinyusb/device/usbd.c:1058:13:process_set_config	20
@@ -32,12 +31,13 @@
 ../tinyusb/device/usbd.c:493:6:tud_connect	1
 ../tinyusb/device/usbd.c:502:6:tud_inited	1
 ../tinyusb/device/usbd.c:506:6:tud_configure	1
-../tinyusb/device/usbd.c:510:6:tud_rhport_init	14
+../tinyusb/device/usbd.c:510:6:tud_rhport_init	18
 ../tinyusb/device/usbd.c:576:6:tud_deinit	9
 ../tinyusb/device/usbd.c:639:6:tud_task_event_ready	2
 ../tinyusb/device/usbd.c:1201:24:dcd_event_handler	34
-../tinyusb/device/usbd.c:1308:6:usbd_spin_lock	3
-../tinyusb/device/usbd.c:1311:6:usbd_spin_unlock	4
+../tinyusb/device/usbd.c:1300:6:usbd_int_set	2
+../tinyusb/device/usbd.c:1308:6:usbd_spin_lock	2
+../tinyusb/device/usbd.c:1311:6:usbd_spin_unlock	2
 ../tinyusb/device/usbd.c:1337:6:usbd_defer_func	5
 ../tinyusb/device/usbd.c:1352:6:usbd_edpt_open	3
 ../tinyusb/device/usbd.c:1316:6:usbd_open_edpt_pair	8
@@ -50,7 +50,7 @@
 ../tinyusb/device/usbd.c:1482:6:usbd_edpt_clear_stall	1
 ../tinyusb/device/usbd.c:1495:6:usbd_edpt_stalled	1
 ../tinyusb/device/usbd.c:807:13:process_control_request	53
-../tinyusb/device/usbd.c:661:6:tud_task_ext	25
+../tinyusb/device/usbd.c:661:6:tud_task_ext	29
 ../tinyusb/device/usbd.c:1508:6:usbd_edpt_close	1
 ../tinyusb/device/usbd.c:1529:6:usbd_sof_enable	3
 ../tinyusb/device/usbd.c:498:6:tud_sof_cb_enable	1

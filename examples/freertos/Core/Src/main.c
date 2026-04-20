@@ -25,6 +25,8 @@
 #include <stdlib.h>
 #include <stdio.h>
 
+#include "tusb.h"
+
 #include "wasm3.h"
 #include "m3_env.h"
 
@@ -83,6 +85,13 @@ const osThreadAttr_t statusTask_attributes = {
   .stack_size = 512 * 4,
   .priority = (osPriority_t) osPriorityLow,
 };
+/* Definitions for usbTask */
+osThreadId_t usbTaskHandle;
+const osThreadAttr_t usbTask_attributes = {
+  .name = "usbTask",
+  .stack_size = 128 * 4,
+  .priority = (osPriority_t) osPriorityLow,
+};
 /* Definitions for tickQueue */
 osMessageQueueId_t tickQueueHandle;
 const osMessageQueueAttr_t tickQueue_attributes = {
@@ -123,7 +132,11 @@ uint8_t ucHeap[configTOTAL_HEAP_SIZE] __attribute__((section(".ccmram"))); // Pu
 
 uint8_t wasm_stack[16 * 1024]; // 16KB for the Wasm stack/internal use
 
-unsigned char wasm_code[WASM_SIZE * 1024] = {0};
+// Your 32KB buffer at address 0x0
+#define WASM_MAX_SIZE (32 * 1024)
+uint8_t wasm_buffer[WASM_MAX_SIZE] __attribute__((aligned(4)));
+uint32_t wasm_file_size = 0;
+volatile bool wasm_ready = false;
 
 unsigned char test_wasm[] = { 0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00,
         0x01, 0x07, 0x01, 0x60, 0x02, 0x7f, 0x7f, 0x01, 0x7f, 0x03, 0x02, 0x01,
@@ -140,10 +153,11 @@ static void MX_USART1_UART_Init(void);
 static void MX_TIM13_Init(void);
 static void MX_TIM3_Init(void);
 static void MX_USB_OTG_FS_PCD_Init(void);
-void StartDefaultTask(void *argument);
+void startDefaultTask(void *argument);
 void startLedTask(void *argument);
 void startTickTask(void *argument);
 void startStatusTask(void *argument);
+void startUsbTask(void *argument);
 
 /* USER CODE BEGIN PFP */
 
@@ -190,6 +204,56 @@ void HAL_TIM_PWM_PulseFinishedCallback(TIM_HandleTypeDef *htim) {
     }
 
 }
+
+//--------------------------------------------------------------------+
+// DFU Callbacks
+//--------------------------------------------------------------------+
+
+void tud_dfu_download_cb(uint8_t alt, uint16_t block_num, uint8_t const* data, uint16_t length) {
+  (void) alt;
+
+  // DfuSe Special Command Handling
+  if (block_num == 0) {
+    // Block 0 is often a 'Command' block in DfuSe.
+    // If the first byte is 0x21, the host is setting the address.
+    if (length > 0 && data[0] == 0x21) {
+        // Host is setting address. For your 0x0 target, we just acknowledge.
+        return;
+    }
+  }
+
+  // Normal Data Download
+  // ST DfuSe offset starts from block 2 for the actual data
+  uint32_t offset = (block_num - 2) * CFG_TUD_DFU_XFER_BUFSIZE;
+
+  if (block_num >= 2 && (offset + length <= WASM_MAX_SIZE)) {
+    memcpy(wasm_buffer + offset, data, length);
+    wasm_file_size = offset + length;
+  }
+}
+
+void tud_dfu_get_status_cb(uint8_t alt, uint8_t* status) {
+  (void) alt;
+
+  status[0] = DFU_STATUS_OK;      // bStatus
+  status[1] = 0;                  // bwPollTimeout (LSB)
+  status[2] = 0;                  // bwPollTimeout
+  status[3] = 0;                  // bwPollTimeout (MSB)
+  status[4] = DFU_DNLOAD_IDLE;    // bState: IMPORTANT - tells host "I'm ready for more"
+  status[5] = 0;                  // iString
+}
+
+void tud_dfu_manifest_cb(uint8_t alt) {
+  (void) alt;
+  wasm_ready = true;
+}
+
+uint32_t tud_dfu_get_timeout_cb(uint8_t alt, uint8_t state) {
+  if (state == DFU_DNBUSY) return 1;
+  return 0;
+}
+
+void tud_dfu_runtime_reboot_to_dfu_cb(void) { }
 
 void run_wasm(void) {
     IM3Environment env = m3_NewEnvironment();
@@ -306,7 +370,7 @@ int main(void)
 
   /* Create the thread(s) */
   /* creation of defaultTask */
-  defaultTaskHandle = osThreadNew(StartDefaultTask, NULL, &defaultTask_attributes);
+  defaultTaskHandle = osThreadNew(startDefaultTask, NULL, &defaultTask_attributes);
 
   /* creation of ledTask */
   ledTaskHandle = osThreadNew(startLedTask, NULL, &ledTask_attributes);
@@ -316,6 +380,9 @@ int main(void)
 
   /* creation of statusTask */
   statusTaskHandle = osThreadNew(startStatusTask, NULL, &statusTask_attributes);
+
+  /* creation of usbTask */
+  usbTaskHandle = osThreadNew(startUsbTask, NULL, &usbTask_attributes);
 
   /* USER CODE BEGIN RTOS_THREADS */
     /* add threads, ... */
@@ -597,14 +664,14 @@ static void MX_GPIO_Init(void)
 
 /* USER CODE END 4 */
 
-/* USER CODE BEGIN Header_StartDefaultTask */
+/* USER CODE BEGIN Header_startDefaultTask */
 /**
- * @brief  Function implementing the defaultTask thread.
- * @param  argument: Not used
- * @retval None
- */
-/* USER CODE END Header_StartDefaultTask */
-void StartDefaultTask(void *argument)
+  * @brief  Function implementing the defaultTask thread.
+  * @param  argument: Not used
+  * @retval None
+  */
+/* USER CODE END Header_startDefaultTask */
+void startDefaultTask(void *argument)
 {
   /* USER CODE BEGIN 5 */
 
@@ -766,6 +833,33 @@ void startStatusTask(void *argument)
 
     }
   /* USER CODE END startStatusTask */
+}
+
+/* USER CODE BEGIN Header_startUsbTask */
+/**
+* @brief Function implementing the usbTask thread.
+* @param argument: Not used
+* @retval None
+*/
+/* USER CODE END Header_startUsbTask */
+void startUsbTask(void *argument)
+{
+  /* USER CODE BEGIN startUsbTask */
+
+    // init device stack on configured roothub port
+    tusb_rhport_init_t dev_init = {
+      .role = TUSB_ROLE_DEVICE,
+      .speed = TUSB_SPEED_AUTO
+    };
+    tusb_init(BOARD_TUD_RHPORT, &dev_init);
+
+  /* Infinite loop */
+  for(;;)
+  {
+    osDelay(10);
+    tud_task();
+  }
+  /* USER CODE END startUsbTask */
 }
 
 /**

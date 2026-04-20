@@ -1,0 +1,13 @@
+../tinyusb/class/dfu/dfu_device.c:65:13:reset_state	1
+../tinyusb/class/dfu/dfu_device.c:423:13:reply_getstatus	1
+../tinyusb/class/dfu/dfu_device.c:365:13:process_download_get_status	5
+../tinyusb/class/dfu/dfu_device.c:394:13:process_manifest_get_status	5
+../tinyusb/class/dfu/dfu_device.c:78:19:tud_dfu_detach_cb	1
+../tinyusb/class/dfu/dfu_device.c:81:19:tud_dfu_abort_cb	1
+../tinyusb/class/dfu/dfu_device.c:85:23:tud_dfu_upload_cb	1
+../tinyusb/class/dfu/dfu_device.c:161:6:dfu_moded_reset	1
+../tinyusb/class/dfu/dfu_device.c:168:6:dfu_moded_init	1
+../tinyusb/class/dfu/dfu_device.c:172:6:dfu_moded_deinit	1
+../tinyusb/class/dfu/dfu_device.c:176:10:dfu_moded_open	15
+../tinyusb/class/dfu/dfu_device.c:217:6:dfu_moded_control_xfer_cb	33
+../tinyusb/class/dfu/dfu_device.c:345:6:tud_dfu_finish_flashing	5

@@ -1,7 +1,7 @@
 ../tinyusb/tusb.c:332:13:stream_claim	3
 ../tinyusb/tusb.c:346:13:stream_xfer	4
 ../tinyusb/tusb.c:363:13:stream_release	2
-../tinyusb/tusb.c:48:19:tusb_time_delay_ms_api	2
+../tinyusb/tusb.c:48:19:tusb_time_delay_ms_api	1
 ../tinyusb/tusb.c:58:20:tusb_app_virt_to_phys	1
 ../tinyusb/tusb.c:62:20:tusb_app_phys_to_virt	1
 ../tinyusb/tusb.c:69:6:tusb_rhport_init	7
@@ -14,7 +14,7 @@
 ../tinyusb/tusb.c:212:6:tu_edpt_claim	5
 ../tinyusb/tusb.c:230:6:tu_edpt_release	3
 ../tinyusb/tusb.c:280:6:tu_bind_driver_to_ep_itf	8
-../tinyusb/tusb.c:308:6:tu_edpt_stream_init	3
+../tinyusb/tusb.c:308:6:tu_edpt_stream_init	4
 ../tinyusb/tusb.c:379:6:tu_edpt_stream_write_zlp_if_needed	7
 ../tinyusb/tusb.c:387:10:tu_edpt_stream_write_xfer	9
 ../tinyusb/tusb.c:411:10:tu_edpt_stream_write	5
