@@ -23,8 +23,7 @@ CFLAGS = --target=wasm32 -Oz -nostdlib \
          -Wl,--no-check-features \
          -Wl,--gc-sections \
          -Xlinker --no-entry \
-         -Xlinker --export=$(FUNCTION) \
-         -Xlinker --import-memory
+         -Xlinker --export=$(FUNCTION) 
 
 .PHONY: all clean check
 
