@@ -6,6 +6,7 @@ FUNCTION = demo
 # Tools
 CC = clang
 XXD = xxd
+STRIP = wasm-strip
 
 # Flags:
 # --target=wasm32: Target Wasm
@@ -19,6 +20,7 @@ CFLAGS = --target=wasm32 -Oz -nostdlib \
          -Wl,--export=toggle \
          -Wl,--allow-undefined \
          -Wl,--strip-all \
+         -Wl,--no-check-features \
          -Wl,--gc-sections \
          -Xlinker --no-entry \
          -Xlinker --export=$(FUNCTION) \
@@ -30,6 +32,7 @@ all: $(TARGET) check
 
 $(TARGET): $(SRC)
 	$(CC) $(CFLAGS) -o $(TARGET) $(SRC)
+	$(STRIP) $(TARGET)
 
 check:
 	@echo "--- Binary Size Report ---"

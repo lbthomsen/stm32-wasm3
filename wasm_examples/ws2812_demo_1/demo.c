@@ -6,13 +6,14 @@
 
 
 void demo() {
-	int led = 0;
+	uint32_t led = 0;
 	
 	for (;;) {
-		set_led(led, 10, 0, 10);
+		host_zero_led_values();
+		host_set_led(led, 10, 0, 10);
 		++led;
 		if (led >= 64) led = 0;
-		delay(10);
+		host_delay(20);
 	}
 }
 
