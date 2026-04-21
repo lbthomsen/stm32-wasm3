@@ -20,7 +20,7 @@ CFLAGS = --target=wasm32 -Oz -nostdlib \
          -Wl,--strip-all \
          -Wl,--gc-sections \
          -Xlinker --no-entry \
-         -Xlinker --export=toggle \
+         -Xlinker --export=demo \
          -Xlinker --import-memory
 
 .PHONY: all clean check
@@ -36,4 +36,4 @@ check:
 	@echo "--------------------------"
 
 clean:
-	rm -f $(TARGET) $(OPT_TARGET) $(HEADER)
+	rm -f $(TARGET) $(HEADER)

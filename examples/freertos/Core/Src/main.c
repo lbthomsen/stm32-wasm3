@@ -135,7 +135,7 @@ const osSemaphoreAttr_t ledSemaphore_attributes = {
 osThreadId_t wasmTaskHandle;
 const osThreadAttr_t wasmTask_attributes = {
         .name = "wasmTask",
-        .stack_size = 1024 * 4,
+        .stack_size = 4 * 1024 * 4,
         .priority = (osPriority_t) osPriorityLow,
 };
 
@@ -150,7 +150,7 @@ ws2812_handleTypeDef ws2812; // The WS2812 panel handler
 uint8_t ucHeap[configTOTAL_HEAP_SIZE] __attribute__((section(".ccmram"))); // Put in ccmram
 #endif
 
-uint8_t wasm_stack[16 * 1024]; // 16KB for the Wasm stack/internal use
+uint8_t wasm_stack[2 * 1024]; // 2KB for the Wasm stack/internal use
 
 uint8_t wasm_buffer[32 * 1024] __attribute__((aligned(4)));
 uint32_t wasm_file_size = 0;
@@ -307,20 +307,17 @@ m3ApiRawFunction(delay) {
     m3ApiSuccess();
 }
 
-m3ApiRawFunction(MyNativeBridge)
+m3ApiRawFunction(set_led)
 {
     // 1. Pick up arguments from the stack in order
-    m3ApiGetArg(uint32_t, width);
-    m3ApiGetArg(uint32_t, height);
-    m3ApiGetArg(float, opacity);
+    m3ApiGetArg(uint32_t, led);
+    m3ApiGetArg(uint32_t, r);
+    m3ApiGetArg(uint32_t, g);
+    m3ApiGetArg(uint32_t, b);
 
-    // 2. Perform your logic
-    printf("Rectangle: %u x %u with opacity %f\n", width, height, opacity);
+    setLedValues(&ws2812, led, r, g, b);
 
-    // 3. Return a value (or m3Err_none)
-    uint32_t area = width * height;
-    m3ApiReturnType(uint32_t);
-    m3ApiReturn(area);
+    m3ApiSuccess();
 }
 
 void run_wasm(void) {
@@ -751,7 +748,7 @@ void startDefaultTask(void *argument)
 
     uint32_t loop_cnt = 0;
 
-    uint8_t led = 0;
+    //uint8_t led = 0;
 
     /* Infinite loop */
     for (;;) {
@@ -771,13 +768,13 @@ void startDefaultTask(void *argument)
 
         }
 
-        zeroLedValues(&ws2812);
-
-        setLedValues(&ws2812, led, 10, 0, 10);
-
-        ++led;
-        if (led >= 64)
-            led = 0;
+//        zeroLedValues(&ws2812);
+//
+//        setLedValues(&ws2812, led, 10, 0, 10);
+//
+//        ++led;
+//        if (led >= 64)
+//            led = 0;
 
         ++loop_cnt;
     }
@@ -920,11 +917,11 @@ void startWasmCtlTask(void *argument)
 {
     /* USER CODE BEGIN startWasmCtlTask */
     /* Infinite loop */
-    osStatus_t ret;
+
     uint16_t wasm_ctl_cmd;
 
     for (;;) {
-        ret = osMessageQueueGet(wasmCtlQueueHandle, &wasm_ctl_cmd, NULL, osWaitForever);
+        osMessageQueueGet(wasmCtlQueueHandle, &wasm_ctl_cmd, NULL, osWaitForever);
 
         osMutexWait(printMutexHandle, osWaitForever);
         if (wasm_ctl_cmd == 1) {
@@ -942,13 +939,17 @@ void startWasmCtlTask(void *argument)
                     }
 
                 } else {
-                    printf("Wasm task reports deleted");
+                    printf("Wasm task reports deleted\n");
                 }
             }
         } else if (wasm_ctl_cmd == 2) {
             printf("WasmCtl cmd = %d\n", wasm_ctl_cmd);
 
             wasmTaskHandle = osThreadNew(startWasmTask, NULL, &wasmTask_attributes);
+
+            if (!wasmTaskHandle) {
+            	printf("wasmTask did not start\n");
+            }
 
         } else {
             printf("WasmCtl cmd unknown\n");
@@ -985,9 +986,33 @@ void startDfuTask(void *argument)
 }
 
 void startWasmTask(void *argument) {
-    for (;;) {
-        osDelay(10);
+
+    IM3Environment env = m3_NewEnvironment();
+
+    IM3Runtime runtime = m3_NewRuntime(env, 1024, NULL);
+
+    IM3Module module;
+    m3_ParseModule(env, &module, wasm_buffer, wasm_file_size);
+    m3_LoadModule(runtime, module);
+
+    m3_LinkRawFunction(module, "env", "delay", "v()", delay);
+    m3_LinkRawFunction(module, "env", "set_led", "v(iiii)", set_led);
+
+    IM3Function f;
+    m3_FindFunction(&f, runtime, "ws2812_demo");
+
+    // Call the function: add(10, 20)
+    const char *i_argv[] = { 0 };
+    m3_CallArgv(f, 0, i_argv);
+
+    // Get the result
+    int32_t result = 0;
+    m3_GetResultsV(f, &result);
+
+    while(1) {
+    	osDelay(10);
     }
+
 }
 
 /**
