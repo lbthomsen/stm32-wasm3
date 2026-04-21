@@ -131,6 +131,14 @@ const osSemaphoreAttr_t ledSemaphore_attributes = {
 };
 /* USER CODE BEGIN PV */
 
+// Let's define our wasm task
+osThreadId_t wasmTaskHandle;
+const osThreadAttr_t wasmTask_attributes = {
+        .name = "wasmTask",
+        .stack_size = 1024 * 4,
+        .priority = (osPriority_t) osPriorityLow,
+};
+
 // Counter updated from high freq timer
 volatile unsigned long ulHighFrequencyTimerTicks;
 
@@ -148,6 +156,7 @@ uint8_t wasm_buffer[32 * 1024] __attribute__((aligned(4)));
 uint32_t wasm_file_size = 0;
 uint32_t _dfu_start_address = 0;
 volatile bool wasm_ready = false;
+volatile bool upload_in_progress = false;
 
 unsigned char test_wasm[] = { 0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00,
         0x01, 0x07, 0x01, 0x60, 0x02, 0x7f, 0x7f, 0x01, 0x7f, 0x03, 0x02, 0x01,
@@ -172,6 +181,7 @@ void startWasmCtlTask(void *argument);
 void startDfuTask(void *argument);
 
 /* USER CODE BEGIN PFP */
+void startWasmTask(void *argument);
 
 /* USER CODE END PFP */
 
@@ -226,7 +236,15 @@ void tud_dfu_download_cb(uint8_t alt, uint16_t block_num, uint8_t const *data, u
 
     // --- DfuSe Special Command Handling (Block 0) ---
     if (block_num == 0) {
+
         if (length > 0) {
+
+            if (!upload_in_progress) {
+                uint16_t wasm_cmd = 1;
+                osMessageQueuePut(wasmCtlQueueHandle, &wasm_cmd, 0, osWaitForever);
+                upload_in_progress = true;
+            }
+
             if (data[0] == 0x21 && length >= 5) {
                 _dfu_start_address = data[1] | (data[2] << 8) | (data[3] << 16) | (data[4] << 24);
             }
@@ -273,9 +291,36 @@ uint32_t tud_dfu_get_timeout_cb(uint8_t alt, uint8_t state) {
 void tud_dfu_manifest_cb(uint8_t alt) {
     (void) alt;
     wasm_ready = true;
+    upload_in_progress = false;
+    uint16_t wasm_cmd = 2;
+
+    osMessageQueuePut(wasmCtlQueueHandle, &wasm_cmd, 0, osWaitForever);
 }
 
 void tud_dfu_runtime_reboot_to_dfu_cb(void) {
+}
+
+// WASM bridge functions
+m3ApiRawFunction(delay) {
+    m3ApiGetArg(uint32_t, delay);
+    osDelay(delay);
+    m3ApiSuccess();
+}
+
+m3ApiRawFunction(MyNativeBridge)
+{
+    // 1. Pick up arguments from the stack in order
+    m3ApiGetArg(uint32_t, width);
+    m3ApiGetArg(uint32_t, height);
+    m3ApiGetArg(float, opacity);
+
+    // 2. Perform your logic
+    printf("Rectangle: %u x %u with opacity %f\n", width, height, opacity);
+
+    // 3. Return a value (or m3Err_none)
+    uint32_t area = width * height;
+    m3ApiReturnType(uint32_t);
+    m3ApiReturn(area);
 }
 
 void run_wasm(void) {
@@ -875,9 +920,41 @@ void startWasmCtlTask(void *argument)
 {
     /* USER CODE BEGIN startWasmCtlTask */
     /* Infinite loop */
-    for (;;)
-            {
-        osDelay(1);
+    osStatus_t ret;
+    uint16_t wasm_ctl_cmd;
+
+    for (;;) {
+        ret = osMessageQueueGet(wasmCtlQueueHandle, &wasm_ctl_cmd, NULL, osWaitForever);
+
+        osMutexWait(printMutexHandle, osWaitForever);
+        if (wasm_ctl_cmd == 1) {
+            printf("WasmCtl cmd = %d\n", wasm_ctl_cmd);
+
+            if (wasmTaskHandle) {
+                eTaskState report = eTaskGetState(wasmTaskHandle);
+
+                if (report != eDeleted) {
+                    printf("Wasm task reports active\n");
+
+                    if (wasmTaskHandle != NULL && eTaskGetState(wasmTaskHandle) != eDeleted) {
+                        vTaskDelete(wasmTaskHandle);
+                        wasmTaskHandle = NULL; // Important: Clear the handle to avoid dangling pointers
+                    }
+
+                } else {
+                    printf("Wasm task reports deleted");
+                }
+            }
+        } else if (wasm_ctl_cmd == 2) {
+            printf("WasmCtl cmd = %d\n", wasm_ctl_cmd);
+
+            wasmTaskHandle = osThreadNew(startWasmTask, NULL, &wasmTask_attributes);
+
+        } else {
+            printf("WasmCtl cmd unknown\n");
+        }
+        osMutexRelease(printMutexHandle);
+
     }
     /* USER CODE END startWasmCtlTask */
 }
@@ -905,6 +982,12 @@ void startDfuTask(void *argument)
     }
 
     /* USER CODE END startDfuTask */
+}
+
+void startWasmTask(void *argument) {
+    for (;;) {
+        osDelay(10);
+    }
 }
 
 /**
