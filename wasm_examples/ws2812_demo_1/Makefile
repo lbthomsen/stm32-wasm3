@@ -1,6 +1,7 @@
 # Variables
 SRC = demo.c
 TARGET = demo.wasm
+FUNCTION = demo
 
 # Tools
 CC = clang
@@ -20,7 +21,7 @@ CFLAGS = --target=wasm32 -Oz -nostdlib \
          -Wl,--strip-all \
          -Wl,--gc-sections \
          -Xlinker --no-entry \
-         -Xlinker --export=demo \
+         -Xlinker --export=$(FUNCTION) \
          -Xlinker --import-memory
 
 .PHONY: all clean check

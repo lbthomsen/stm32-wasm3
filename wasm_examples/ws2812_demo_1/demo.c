@@ -5,7 +5,7 @@
 #include "api.h"
 
 
-void ws2812_demo() {
+void demo() {
 	int led = 0;
 	
 	for (;;) {
