@@ -1,4 +1,4 @@
 ../Core/Src/usb_descriptors.c:31:16:tud_descriptor_device_cb	1
-../Core/Src/usb_descriptors.c:53:16:tud_descriptor_configuration_cb	1
-../Core/Src/usb_descriptors.c:78:17:tud_descriptor_string_cb	5
-../Core/Src/usb_descriptors.c:102:17:tud_descriptor_bos_cb	1
+../Core/Src/usb_descriptors.c:57:16:tud_descriptor_configuration_cb	1
+../Core/Src/usb_descriptors.c:82:17:tud_descriptor_string_cb	5
+../Core/Src/usb_descriptors.c:106:17:tud_descriptor_bos_cb	1

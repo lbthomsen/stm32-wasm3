@@ -19,7 +19,7 @@ static const tusb_desc_device_t desc_device = {
 
     .idVendor           = USB_VID,
     .idProduct          = USB_PID,
-    .bcdDevice          = 0x0100,
+    .bcdDevice          = 0x011a,
 
     .iManufacturer      = 0x01,
     .iProduct           = 0x02,
@@ -40,13 +40,17 @@ enum {
     ITF_NUM_TOTAL
 };
 
-// Config(9) + Interface(9) + Functional(9) = 27 bytes
+// 1. Ensure your length calculation is correct.
+// TUD_CONFIG_DESC_LEN is 9 bytes.
+// TUD_DFU_DESC_LEN(1) is 9 bytes for the interface + 9 bytes for the functional descriptor = 18 bytes.
+// Total should be 27 bytes.
 #define CONFIG_TOTAL_LEN (TUD_CONFIG_DESC_LEN + TUD_DFU_DESC_LEN(1))
 
 uint8_t const desc_configuration[] __attribute__((aligned(4))) = {
+    // Configuration number, interface count, string index, total length, attribute, power in mA
     TUD_CONFIG_DESCRIPTOR(1, ITF_NUM_TOTAL, 0, CONFIG_TOTAL_LEN, 0x80, 100),
 
-    // Interface number, Alternate count, string index (4), attributes, detach timeout, transfer size
+    // Interface number, Alternate count, string index, attributes, detach timeout, transfer size
     TUD_DFU_DESCRIPTOR(ITF_NUM_DFU, 1, 4, 0x07, 1000, CFG_TUD_DFU_XFER_BUFSIZE)
 };
 
@@ -70,7 +74,7 @@ static char const* string_desc_arr[] = {
      * Example for 64KB RAM starting at 0x20000000:
      * a = Read/Write, e = Readable, g = Readable/Writable/Erasable
      */
-    "@Internal WASM /0x00000000/32*001Ka"
+    "@Internal WASM /0x00000000/32*001Kg"
 };
 
 static uint16_t _desc_str[64 + 1]; // Increased size for the long DFU string
