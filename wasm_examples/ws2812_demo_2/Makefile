@@ -15,22 +15,15 @@ STRIP = wasm-strip
 # -Wl,--export-all: Export your C functions to the Wasm engine
 # -Os: Optimize for size
 #CFLAGS = --target=wasm32 -O3 -nostdlib -Wl,--no-entry -Wl,--export-all -Wl,--allow-undefined -Wl,--strip-all -Wl,--gc-sections
-#CFLAGS = --target=wasm32 -Oz -nostdlib \
-#         -Wl,--no-entry \
-#         -Wl,--export=toggle \
-#         -Wl,--allow-undefined \
-#         -Wl,--strip-all \
-#         -Wl,--no-check-features \
-#         -Wl,--gc-sections \
-#         -Xlinker --no-entry \
-#         -Xlinker --export=$(FUNCTION) 
 CFLAGS = --target=wasm32 -Oz -nostdlib \
          -Wl,--no-entry \
-         -Wl,--export=$(FUNCTION) \
+         -Wl,--export=toggle \
          -Wl,--allow-undefined \
          -Wl,--strip-all \
+         -Wl,--no-check-features \
          -Wl,--gc-sections \
-         -Xlinker --no-entry
+         -Xlinker --no-entry \
+         -Xlinker --export=$(FUNCTION) 
 
 .PHONY: all clean check
 
