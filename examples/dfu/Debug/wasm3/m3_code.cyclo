@@ -1,0 +1,13 @@
+../wasm3/m3_code.c:15:14:NewCodePage	5
+../wasm3/m3_code.c:67:7:FreeCodePages	2
+../wasm3/m3_code.c:87:6:NumFreeLines	1
+../wasm3/m3_code.c:95:7:EmitWord_impl	1
+../wasm3/m3_code.c:100:7:EmitWord32	1
+../wasm3/m3_code.c:105:7:EmitWord64	1
+../wasm3/m3_code.c:133:7:GetPageStartPC	1
+../wasm3/m3_code.c:139:7:GetPagePC	2
+../wasm3/m3_code.c:148:7:PushCodePage	1
+../wasm3/m3_code.c:156:14:PopCodePage	1
+../wasm3/m3_code.c:167:6:FindCodePageEnd	2
+../wasm3/m3_code.c:183:6:CountCodePages	1
+../wasm3/m3_code.c:190:13:GetEndCodePage	1

@@ -135,7 +135,7 @@ const osSemaphoreAttr_t ledSemaphore_attributes = {
 osThreadId_t wasmTaskHandle;
 const osThreadAttr_t wasmTask_attributes = {
         .name = "wasmTask",
-        .stack_size = 4 * 1024 * 4,
+        .stack_size = 512 * 4,
         .priority = (osPriority_t) osPriorityLow,
 };
 

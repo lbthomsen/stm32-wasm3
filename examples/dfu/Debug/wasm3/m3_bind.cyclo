@@ -1,0 +1,6 @@
+../wasm3/m3_bind.c:13:5:ConvertTypeCharToTypeId	8
+../wasm3/m3_bind.c:27:11:SignatureToFuncType	16
+../wasm3/m3_bind.c:100:11:ValidateSignature	3
+../wasm3/m3_bind.c:123:11:FindAndLinkFunction	11
+../wasm3/m3_bind.c:157:11:m3_LinkRawFunctionEx	1
+../wasm3/m3_bind.c:167:11:m3_LinkRawFunction	1
