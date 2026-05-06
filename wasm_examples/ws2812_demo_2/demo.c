@@ -7,7 +7,7 @@
 void demo() {
     uint32_t led = 0;
     uint8_t color = 0;
-    static const uint32_t led_color[][3] = {
+    uint32_t led_color[][3] = {
         {10, 0, 0}, 
         {0, 10, 0}, 
         {0, 0, 10}, 

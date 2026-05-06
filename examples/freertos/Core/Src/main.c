@@ -150,7 +150,7 @@ ws2812_handleTypeDef ws2812; // The WS2812 panel handler
 uint8_t ucHeap[configTOTAL_HEAP_SIZE] __attribute__((section(".ccmram"))); // Put in ccmram
 #endif
 
-uint8_t wasm_stack[2 * 1024] __attribute__((aligned(8))); // 2KB for the Wasm stack/internal use
+//uint8_t wasm_stack[2 * 1024] __attribute__((aligned(8))); // 2KB for the Wasm stack/internal use
 
 uint8_t wasm_buffer[32 * 1024] __attribute__((aligned(4)));
 uint32_t wasm_file_size = 0;
@@ -158,11 +158,6 @@ uint32_t _dfu_start_address = 0;
 volatile bool wasm_ready = false;
 volatile bool upload_in_progress = false;
 volatile bool wasm_should_stop = false;
-
-unsigned char test_wasm[] = { 0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00,
-		0x01, 0x07, 0x01, 0x60, 0x02, 0x7f, 0x7f, 0x01, 0x7f, 0x03, 0x02, 0x01,
-		0x00, 0x07, 0x07, 0x01, 0x03, 0x61, 0x64, 0x64, 0x00, 0x00, 0x0a, 0x09,
-		0x01, 0x07, 0x00, 0x20, 0x00, 0x20, 0x01, 0x6a, 0x0b };
 
 /* USER CODE END PV */
 
@@ -739,7 +734,7 @@ void startWasmTask(void *argument) {
 
         IM3Environment env = m3_NewEnvironment();
         if (env) {
-            IM3Runtime runtime = m3_NewRuntime(env, 1024, NULL);
+            IM3Runtime runtime = m3_NewRuntime(env, 32 * 1024, NULL);
             if (runtime) {
                 IM3Module module;
                 result = m3_ParseModule(env, &module, wasm_buffer, wasm_file_size);

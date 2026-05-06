@@ -22,6 +22,10 @@ CFLAGS = --target=wasm32 -Oz -nostdlib \
          -Wl,--strip-all \
          -Wl,--no-check-features \
          -Wl,--gc-sections \
+  	 -Wl,--import-memory \
+         -Wl,--initial-memory=65536 \
+         -Wl,--max-memory=65536 \
+         -Wl,-z,stack-size=512 \
          -Xlinker --no-entry \
          -Xlinker --export=$(FUNCTION) \
          -Xlinker --import-memory
